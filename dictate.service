@@ -1,0 +1,12 @@
+[Unit]
+Description=Voice Dictation Service
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.voice/start-dictate.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
