@@ -5,6 +5,8 @@ Push-to-talk voice dictation using Groq's Whisper API.
 ## Installation
 
 ```bash
+git clone <repo-url> ~/.local/opt/voice-dictation
+cd ~/.local/opt/voice-dictation
 ./install.sh
 cp .env.example .env
 # Edit .env and add your Groq API key from https://console.groq.com/keys
