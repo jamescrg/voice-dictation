@@ -44,9 +44,17 @@ if not os.environ.get("GROQ_API_KEY"):
 # Configuration
 SAMPLE_RATE = 16000
 CHANNELS = 1
+STATUS_TEXT = "Recording..."
 
 # Initialize Groq client
 client = Groq()
+
+
+def clear_status():
+    """Delete the status text from the input."""
+    for _ in range(len(STATUS_TEXT)):
+        subprocess.run(["xdotool", "key", "BackSpace"], check=True)
+
 
 # Recording state
 recording = False
@@ -65,7 +73,7 @@ def start_recording():
     global recording, audio_data
     audio_data = []
     recording = True
-    print("Recording... (release key to stop)")
+    subprocess.run(["xdotool", "type", "--clearmodifiers", "--", STATUS_TEXT], check=True)
 
 
 def stop_recording():
@@ -78,13 +86,11 @@ def stop_recording():
         audio_data.append(audio_queue.get())
 
     if not audio_data:
-        print("No audio recorded")
+        clear_status()
         return
 
     # Combine audio chunks
     audio = np.concatenate(audio_data)
-
-    print("Transcribing...")
     transcribe_and_type(audio)
 
 
@@ -110,17 +116,15 @@ def transcribe_and_type(audio: np.ndarray):
             )
 
         text = transcription.text.strip()
+        clear_status()
         if text:
             global last_transcription
             last_transcription = text
-            print(f"Transcribed: {text}")
             # Type using xdotool
             subprocess.run(["xdotool", "type", "--clearmodifiers", "--", text], check=True)
-        else:
-            print("No speech detected")
 
     except Exception as e:
-        print(f"Error: {e}")
+        clear_status()
 
     finally:
         os.unlink(temp_path)
