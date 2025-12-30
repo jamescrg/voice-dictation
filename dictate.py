@@ -31,6 +31,10 @@ try:
     import sounddevice as sd
     from groq import Groq
     from pynput import keyboard
+    import gi
+    gi.require_version('Gtk', '3.0')
+    gi.require_version('AyatanaAppIndicator3', '0.1')
+    from gi.repository import Gtk, AyatanaAppIndicator3 as AppIndicator3, GLib
 except ImportError as e:
     print(f"Missing dependency: {e}")
     print("Run: ./install.sh")
@@ -44,16 +48,23 @@ if not os.environ.get("GROQ_API_KEY"):
 # Configuration
 SAMPLE_RATE = 16000
 CHANNELS = 1
-STATUS_TEXT = "Recording..."
 
 # Initialize Groq client
 client = Groq()
 
+# Tray icon names (from user's icon theme)
+ICON_IDLE = "microphone-sensitivity-low"
+ICON_RECORDING = "microphone-sensitivity-high"
+ICON_TRANSCRIBING = "microphone-sensitivity-medium"
 
-def clear_status():
-    """Delete the status text from the input."""
-    for _ in range(len(STATUS_TEXT)):
-        subprocess.run(["xdotool", "key", "BackSpace"], check=True)
+indicator = None
+
+
+def set_tray_status(icon_name):
+    """Update the tray icon."""
+    global indicator
+    if indicator:
+        GLib.idle_add(indicator.set_icon_full, icon_name, "Voice Dictation")
 
 
 # Recording state
@@ -73,7 +84,7 @@ def start_recording():
     global recording, audio_data
     audio_data = []
     recording = True
-    subprocess.run(["xdotool", "type", "--clearmodifiers", "--", STATUS_TEXT], check=True)
+    set_tray_status(ICON_RECORDING)
 
 
 def stop_recording():
@@ -86,11 +97,12 @@ def stop_recording():
         audio_data.append(audio_queue.get())
 
     if not audio_data:
-        clear_status()
+        set_tray_status(ICON_IDLE)
         return
 
     # Combine audio chunks
     audio = np.concatenate(audio_data)
+    set_tray_status(ICON_TRANSCRIBING)
     transcribe_and_type(audio)
 
 
@@ -116,18 +128,18 @@ def transcribe_and_type(audio: np.ndarray):
             )
 
         text = transcription.text.strip()
-        clear_status()
         if text:
-            global last_transcription
-            last_transcription = text
+            text += " "  # Add trailing space
+            transcription_stack.append(text)
             # Type using xdotool
             subprocess.run(["xdotool", "type", "--clearmodifiers", "--", text], check=True)
 
     except Exception as e:
-        clear_status()
+        pass
 
     finally:
         os.unlink(temp_path)
+        set_tray_status(ICON_IDLE)
 
 
 HOTKEY = keyboard.Key.pause
@@ -138,7 +150,7 @@ DOUBLE_TAP_THRESHOLD = 0.3  # seconds - tap twice within this to undo
 backtick_press_time = None
 backtick_timer = None
 last_backtick_tap_time = None
-last_transcription = None
+transcription_stack = []
 
 
 def on_press(key):
@@ -169,15 +181,11 @@ def start_recording_from_backtick():
 
 def undo_last_transcription():
     """Delete the last transcription by sending backspaces."""
-    global last_transcription
-    if last_transcription:
-        print(f"Undoing: {last_transcription}")
+    if transcription_stack:
+        text = transcription_stack.pop()
         # Send backspaces to delete the text
-        for _ in range(len(last_transcription)):
+        for _ in range(len(text)):
             subprocess.run(["xdotool", "key", "BackSpace"], check=True)
-        last_transcription = None
-    else:
-        print("Nothing to undo")
 
 
 def on_release(key):
@@ -216,7 +224,24 @@ def on_release(key):
                     last_backtick_tap_time = now
 
 
+def run_dictation():
+    """Run the dictation logic."""
+    # Start audio stream
+    with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS,
+                        callback=audio_callback, dtype=np.float32):
+        # Start keyboard listener
+        with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
+            listener.join()
+
+
+def on_quit(source):
+    """Quit the application."""
+    Gtk.main_quit()
+
+
 def main():
+    global indicator
+
     print(f"Voice dictation ready!")
     print(f"Hold Pause or backtick (`) to record, release to transcribe")
     print(f"Tap backtick = types backtick")
@@ -224,12 +249,28 @@ def main():
     print("Press Ctrl+C to exit")
     print("-" * 40)
 
-    # Start audio stream
-    with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS,
-                        callback=audio_callback, dtype=np.float32):
-        # Start keyboard listener
-        with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
-            listener.join()
+    # Create AppIndicator
+    indicator = AppIndicator3.Indicator.new(
+        "voice-dictation",
+        ICON_IDLE,
+        AppIndicator3.IndicatorCategory.APPLICATION_STATUS
+    )
+    indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
+
+    # Create menu
+    menu = Gtk.Menu()
+    quit_item = Gtk.MenuItem(label="Quit")
+    quit_item.connect("activate", on_quit)
+    menu.append(quit_item)
+    menu.show_all()
+    indicator.set_menu(menu)
+
+    # Run dictation in a separate thread
+    dictation_thread = threading.Thread(target=run_dictation, daemon=True)
+    dictation_thread.start()
+
+    # Run GTK main loop
+    Gtk.main()
 
 
 if __name__ == "__main__":
