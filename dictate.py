@@ -52,10 +52,12 @@ CHANNELS = 1
 # Initialize Groq client
 client = Groq()
 
-# Tray icon names (from user's icon theme)
-ICON_IDLE = "microphone-sensitivity-low"
-ICON_RECORDING = "microphone-sensitivity-high"
-ICON_TRANSCRIBING = "microphone-sensitivity-medium"
+# Custom icon paths
+SCRIPT_DIR = Path(__file__).parent
+ICON_DIR = str(SCRIPT_DIR / "icons")
+ICON_IDLE = "mic-idle"
+ICON_RECORDING = "mic-recording"
+ICON_TRANSCRIBING = "mic-transcribing"
 
 indicator = None
 
@@ -249,12 +251,13 @@ def main():
     print("Press Ctrl+C to exit")
     print("-" * 40)
 
-    # Create AppIndicator
+    # Create AppIndicator with custom icon path
     indicator = AppIndicator3.Indicator.new(
         "voice-dictation",
         ICON_IDLE,
         AppIndicator3.IndicatorCategory.APPLICATION_STATUS
     )
+    indicator.set_icon_theme_path(ICON_DIR)
     indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
 
     # Create menu
