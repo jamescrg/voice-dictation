@@ -151,12 +151,19 @@ DOUBLE_TAP_THRESHOLD = 0.3  # seconds - tap twice within this to undo
 backtick_press_time = None
 backtick_timer = None
 last_backtick_tap_time = None
+
+# Apostrophe state
+apostrophe_press_time = None
+apostrophe_timer = None
+last_apostrophe_tap_time = None
+
 transcription_stack = []
 
 
 def on_press(key):
     """Handle key press."""
     global recording, backtick_press_time, backtick_timer
+    global apostrophe_press_time, apostrophe_timer
 
     # Pause key - immediate recording
     if key == HOTKEY and not recording:
@@ -170,12 +177,28 @@ def on_press(key):
         backtick_timer = threading.Timer(BACKTICK_HOLD_THRESHOLD, start_recording_from_backtick)
         backtick_timer.start()
 
+    # Apostrophe - start timer for hold detection
+    if getattr(key, 'char', None) == "'" and not recording:
+        apostrophe_press_time = time.time()
+        # Start a timer to begin recording after threshold
+        apostrophe_timer = threading.Timer(BACKTICK_HOLD_THRESHOLD, start_recording_from_apostrophe)
+        apostrophe_timer.start()
+
 
 def start_recording_from_backtick():
     """Called when backtick is held long enough."""
     global backtick_press_time
     if backtick_press_time is not None:
         # Delete the backtick that was typed
+        subprocess.run(["xdotool", "key", "BackSpace"], check=True)
+        start_recording()
+
+
+def start_recording_from_apostrophe():
+    """Called when apostrophe is held long enough."""
+    global apostrophe_press_time
+    if apostrophe_press_time is not None:
+        # Delete the apostrophe that was typed
         subprocess.run(["xdotool", "key", "BackSpace"], check=True)
         start_recording()
 
@@ -192,6 +215,7 @@ def undo_last_transcription():
 def on_release(key):
     """Handle key release."""
     global recording, backtick_press_time, backtick_timer, last_backtick_tap_time
+    global apostrophe_press_time, apostrophe_timer, last_apostrophe_tap_time
 
     # Pause key release
     if key == HOTKEY and recording:
@@ -224,6 +248,32 @@ def on_release(key):
                     # Single tap - record time for potential double-tap
                     last_backtick_tap_time = now
 
+    # Apostrophe release
+    if getattr(key, 'char', None) == "'":
+        # Cancel the timer if still running
+        if apostrophe_timer is not None:
+            apostrophe_timer.cancel()
+            apostrophe_timer = None
+
+        if apostrophe_press_time is not None:
+            held_duration = time.time() - apostrophe_press_time
+            apostrophe_press_time = None
+
+            if recording:
+                # Was held long enough, stop recording
+                stop_recording()
+            elif held_duration < BACKTICK_HOLD_THRESHOLD:
+                # Quick tap - check for double-tap
+                now = time.time()
+                if last_apostrophe_tap_time and (now - last_apostrophe_tap_time) < DOUBLE_TAP_THRESHOLD:
+                    # Double-tap detected - delete both apostrophes and undo
+                    subprocess.run(["xdotool", "key", "BackSpace", "BackSpace"], check=True)
+                    undo_last_transcription()
+                    last_apostrophe_tap_time = None
+                else:
+                    # Single tap - record time for potential double-tap
+                    last_apostrophe_tap_time = now
+
 
 def run_dictation():
     """Run the dictation logic."""
@@ -244,9 +294,9 @@ def main():
     global indicator
 
     print(f"Voice dictation ready!")
-    print(f"Hold Pause or backtick (`) to record, release to transcribe")
-    print(f"Tap backtick = types backtick")
-    print(f"Double-tap backtick = undo last transcription")
+    print(f"Hold Pause, backtick (`), or apostrophe (') to record")
+    print(f"Tap backtick/apostrophe = types the character")
+    print(f"Double-tap backtick/apostrophe = undo last transcription")
     print("Press Ctrl+C to exit")
     print("-" * 40)
 
