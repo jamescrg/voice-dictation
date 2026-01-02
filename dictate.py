@@ -285,6 +285,12 @@ def run_dictation():
             listener.join()
 
 
+def on_reload(source):
+    """Reload the application."""
+    Gtk.main_quit()
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
+
 def on_quit(source):
     """Quit the application."""
     Gtk.main_quit()
@@ -311,6 +317,9 @@ def main():
 
     # Create menu
     menu = Gtk.Menu()
+    reload_item = Gtk.MenuItem(label="Reload")
+    reload_item.connect("activate", on_reload)
+    menu.append(reload_item)
     quit_item = Gtk.MenuItem(label="Quit")
     quit_item.connect("activate", on_quit)
     menu.append(quit_item)
