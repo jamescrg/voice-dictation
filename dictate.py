@@ -126,7 +126,6 @@ def transcribe_and_type(audio: np.ndarray):
             transcription = client.audio.transcriptions.create(
                 model="whisper-large-v3",
                 file=audio_file,
-                language="en",
             )
 
         text = transcription.text.strip()
