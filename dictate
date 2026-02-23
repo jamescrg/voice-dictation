@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Voice Dictation service controller
+
+SERVICE="dictate.service"
+
+usage() {
+    echo "Usage: dictate [command]"
+    echo ""
+    echo "Commands:"
+    echo "  start       Start the dictation service"
+    echo "  stop        Stop the dictation service"
+    echo "  restart     Restart the dictation service"
+    echo "  status      Show service status"
+    echo "  log         Show recent logs"
+    echo "  follow      Follow logs in real time"
+    echo ""
+    echo "With no command, starts the service if stopped, or shows status if running."
+}
+
+case "${1:-}" in
+    start)
+        systemctl --user start "$SERVICE"
+        echo "Dictation service started."
+        ;;
+    stop)
+        systemctl --user stop "$SERVICE"
+        echo "Dictation service stopped."
+        ;;
+    restart)
+        systemctl --user restart "$SERVICE"
+        echo "Dictation service restarted."
+        ;;
+    status)
+        systemctl --user status "$SERVICE"
+        ;;
+    log)
+        journalctl --user -u "$SERVICE" -n 50 --no-pager
+        ;;
+    follow)
+        journalctl --user -u "$SERVICE" -f
+        ;;
+    -h|--help|help)
+        usage
+        ;;
+    "")
+        if systemctl --user is-active "$SERVICE" &>/dev/null; then
+            systemctl --user status "$SERVICE"
+        else
+            systemctl --user start "$SERVICE"
+            echo "Dictation service started."
+        fi
+        echo ""
+        usage
+        ;;
+    *)
+        echo "Unknown command: $1"
+        usage
+        exit 1
+        ;;
+esac

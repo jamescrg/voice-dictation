@@ -64,6 +64,11 @@ cp "$SCRIPT_DIR/dictate.service" ~/.config/systemd/user/
 # Set up environment for systemctl --user if needed
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
+# Install CLI command
+echo "Installing 'dictate' command..."
+mkdir -p ~/.local/bin
+ln -sf "$SCRIPT_DIR/dictate" ~/.local/bin/dictate
+
 if systemctl --user daemon-reload 2>/dev/null; then
     systemctl --user enable dictate.service
     systemctl --user restart dictate.service
@@ -77,11 +82,8 @@ fi
 echo ""
 echo "Installation complete!"
 echo ""
-echo "Service commands:"
-echo "  systemctl --user status dictate   - Check status"
-echo "  systemctl --user restart dictate  - Restart service"
-echo "  systemctl --user stop dictate     - Stop service"
-echo "  journalctl --user -u dictate -f   - View logs"
+echo "Run 'dictate' from any terminal to manage the service."
+echo "Run 'dictate --help' for available commands."
 echo ""
 echo "Controls:"
 echo "  Hold Pause or backtick (\`) - Record"
