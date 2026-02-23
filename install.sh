@@ -69,6 +69,11 @@ echo "Installing 'dictate' command..."
 mkdir -p ~/.local/bin
 ln -sf "$SCRIPT_DIR/dictate" ~/.local/bin/dictate
 
+# Install desktop entry
+echo "Installing desktop entry..."
+mkdir -p ~/.local/share/applications
+ln -sf "$SCRIPT_DIR/dictate.desktop" ~/.local/share/applications/dictate.desktop
+
 if systemctl --user daemon-reload 2>/dev/null; then
     systemctl --user enable dictate.service
     systemctl --user restart dictate.service
