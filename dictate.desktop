@@ -1,7 +1,7 @@
 [Desktop Entry]
 Name=Voice Dictation
 Comment=Push-to-talk voice dictation using Groq Whisper
-Exec=/home/james/.local/opt/voice-dictation/start-dictate.sh
+Exec=/home/james/.local/bin/dictate start
 Icon=/home/james/.local/opt/voice-dictation/icons/mic-idle.svg
 Type=Application
 Categories=Utility;Accessibility;

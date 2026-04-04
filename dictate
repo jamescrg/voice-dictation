@@ -44,13 +44,12 @@ case "${1:-}" in
         ;;
     "")
         if systemctl --user is-active "$SERVICE" &>/dev/null; then
-            systemctl --user status "$SERVICE"
+            systemctl --user restart "$SERVICE"
+            echo "Dictation service restarted."
         else
             systemctl --user start "$SERVICE"
             echo "Dictation service started."
         fi
-        echo ""
-        usage
         ;;
     *)
         echo "Unknown command: $1"
