@@ -75,16 +75,14 @@ recording = False
 typing_transcription = False  # True while xdotool is typing output
 audio_queue = queue.Queue()
 audio_data = []
-device_error = threading.Event()  # Signals device disconnection/error
+callback_alive = threading.Event()  # Set by audio callback to signal it's active
 
 
 def audio_callback(indata, frames, time, status):
     """Callback for audio recording."""
+    callback_alive.set()
     if status:
-        # Device error detected (disconnection, overflow, etc.)
-        print(f"Audio device error: {status}")
-        device_error.set()
-        return
+        print(f"Audio device warning: {status}")
     if recording:
         audio_queue.put(indata.copy())
 
@@ -250,33 +248,33 @@ def run_dictation():
     """Run the dictation logic with automatic device reconnection."""
     global recording
     RECONNECT_DELAY = 2.0  # seconds to wait before reconnecting
+    CALLBACK_TIMEOUT = 5.0  # seconds with no callbacks = device dead
 
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
         while listener.running:
-            device_error.clear()
             try:
                 print("Opening audio device...")
                 with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS,
                                     callback=audio_callback, dtype=np.float32):
                     print("Audio device ready")
                     set_tray_status(ICON_IDLE)
-                    # Wait for device error or listener to stop
-                    while listener.running and not device_error.is_set():
-                        device_error.wait(timeout=0.5)
-
-                    if device_error.is_set():
-                        print("Device error detected, will reconnect...")
-                        # Reset recording state
-                        recording = False
-                        # Clear any stale audio data
-                        while not audio_queue.empty():
-                            audio_queue.get()
+                    # Use a watchdog: if the audio callback stops firing,
+                    # the device is truly dead (not just a transient error)
+                    callback_alive.set()
+                    while listener.running:
+                        callback_alive.clear()
+                        if not callback_alive.wait(timeout=CALLBACK_TIMEOUT):
+                            print("Audio device unresponsive, reconnecting...")
+                            recording = False
+                            while not audio_queue.empty():
+                                audio_queue.get()
+                            break
             except sd.PortAudioError as e:
                 print(f"Audio device error: {e}")
             except Exception as e:
                 print(f"Unexpected audio error: {e}")
 
-            # If we get here, either device errored or listener stopped
+            # If we get here, either device died or listener stopped
             if listener.running:
                 set_tray_status(ICON_ERROR)
                 print(f"Reconnecting in {RECONNECT_DELAY} seconds...")
