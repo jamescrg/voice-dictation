@@ -4,6 +4,7 @@ Voice dictation using Groq's Whisper API.
 Hold the hotkey to record, release to transcribe and type.
 """
 
+import signal
 import subprocess
 import tempfile
 import threading
@@ -244,6 +245,18 @@ def on_release(key):
                     last_backtick_tap_time = now
 
 
+def close_stream_safely(stream):
+    """Close an audio stream, handling errors from dead devices."""
+    try:
+        stream.abort()
+    except Exception:
+        pass
+    try:
+        stream.close()
+    except Exception as e:
+        print(f"Error closing audio stream: {e}")
+
+
 def run_dictation():
     """Run the dictation logic with automatic device reconnection."""
     global recording
@@ -252,27 +265,32 @@ def run_dictation():
 
     with keyboard.Listener(on_press=on_press, on_release=on_release) as listener:
         while listener.running:
+            stream = None
             try:
                 print("Opening audio device...")
-                with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS,
-                                    callback=audio_callback, dtype=np.float32):
-                    print("Audio device ready")
-                    set_tray_status(ICON_IDLE)
-                    # Use a watchdog: if the audio callback stops firing,
-                    # the device is truly dead (not just a transient error)
-                    callback_alive.set()
-                    while listener.running:
-                        callback_alive.clear()
-                        if not callback_alive.wait(timeout=CALLBACK_TIMEOUT):
-                            print("Audio device unresponsive, reconnecting...")
-                            recording = False
-                            while not audio_queue.empty():
-                                audio_queue.get()
-                            break
+                stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS,
+                                        callback=audio_callback, dtype=np.float32)
+                stream.start()
+                print("Audio device ready")
+                set_tray_status(ICON_IDLE)
+                # Use a watchdog: if the audio callback stops firing,
+                # the device is truly dead (not just a transient error)
+                callback_alive.set()
+                while listener.running:
+                    callback_alive.clear()
+                    if not callback_alive.wait(timeout=CALLBACK_TIMEOUT):
+                        print("Audio device unresponsive, reconnecting...")
+                        recording = False
+                        while not audio_queue.empty():
+                            audio_queue.get()
+                        break
             except sd.PortAudioError as e:
                 print(f"Audio device error: {e}")
             except Exception as e:
                 print(f"Unexpected audio error: {e}")
+            finally:
+                if stream is not None:
+                    close_stream_safely(stream)
 
             # If we get here, either device died or listener stopped
             if listener.running:
@@ -294,6 +312,10 @@ def on_quit(source):
 
 def main():
     global indicator
+
+    # Handle SIGABRT from PortAudio crashes (e.g. closing dead ALSA devices
+    # after a KVM switch) — exit cleanly so systemd can restart us.
+    signal.signal(signal.SIGABRT, lambda *_: os._exit(1))
 
     print(f"Voice dictation ready!")
     print(f"Hold Pause or backtick (`) to record")
