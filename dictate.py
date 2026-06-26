@@ -4,6 +4,7 @@ Voice dictation using Groq's Whisper API.
 Hold the hotkey to record, release to transcribe and type.
 """
 
+import re
 import signal
 import subprocess
 import tempfile
@@ -115,6 +116,19 @@ def stop_recording():
     transcribe_and_type(audio)
 
 
+def apply_substitutions(text: str) -> str:
+    """Apply post-transcription word substitutions."""
+    # "Cosmos" → "Kosmos" except when preceded by the definite article "the"
+    text = re.sub(r'(?<![Tt]he )Cosmos', 'Kosmos', text)
+    # Client name: "Campbell & <B-word>" → "Campbell & Brannon".
+    # Whisper renders "Brannon" as many sound-alikes (Brannan, Brannen,
+    # Brandon, Brana, …); the "Campbell &/and" prefix is the reliable anchor,
+    # so normalize whatever B-word follows it to the correct spelling.
+    text = re.sub(r'\bCampbell\s*(?:&|and|\+)\s*B\w*',
+                  'Campbell & Brannon', text, flags=re.IGNORECASE)
+    return text
+
+
 def transcribe_and_type(audio: np.ndarray):
     """Send audio to Groq and type the result."""
     global typing_transcription
@@ -136,7 +150,7 @@ def transcribe_and_type(audio: np.ndarray):
                 file=audio_file,
             )
 
-        text = transcription.text.strip()
+        text = apply_substitutions(transcription.text.strip())
         if text:
             text += " "  # Add trailing space
             transcription_stack.append(text)
