@@ -118,14 +118,19 @@ def stop_recording():
 
 def apply_substitutions(text: str) -> str:
     """Apply post-transcription word substitutions."""
-    # "Cosmos" → "Kosmos" except when preceded by the definite article "the"
-    text = re.sub(r'(?<![Tt]he )Cosmos', 'Kosmos', text)
+    # "Cosmos" / "Cosmo's" → "Kosmos" except when preceded by the definite
+    # article "the" (Whisper renders the client name both ways).
+    text = re.sub(r"(?<![Tt]he )Cosmo(?:s|'s)", 'Kosmos', text)
     # Client name: "Campbell & <B-word>" → "Campbell & Brannon".
     # Whisper renders "Brannon" as many sound-alikes (Brannan, Brannen,
     # Brandon, Brana, …); the "Campbell &/and" prefix is the reliable anchor,
     # so normalize whatever B-word follows it to the correct spelling.
     text = re.sub(r'\bCampbell\s*(?:&|and|\+)\s*B\w*',
                   'Campbell & Brannon', text, flags=re.IGNORECASE)
+    # "Gemini" is often mis-transcribed as "Jim and I", "Jim and eye",
+    # "Jiminy", "Gymini", "Gemani", etc. Normalize the common variants.
+    text = re.sub(r'\bJim\s+and\s+(?:I|eye)\b', 'Gemini', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(?:Jiminy|Gymini|Gemani)\b', 'Gemini', text, flags=re.IGNORECASE)
     return text
 
 
