@@ -131,6 +131,8 @@ def apply_substitutions(text: str) -> str:
     # "Jiminy", "Gymini", "Gemani", etc. Normalize the common variants.
     text = re.sub(r'\bJim\s+and\s+(?:I|eye)\b', 'Gemini', text, flags=re.IGNORECASE)
     text = re.sub(r'\b(?:Jiminy|Gymini|Gemani)\b', 'Gemini', text, flags=re.IGNORECASE)
+    # Name: "Lexie" (and "Lexy") → "Lexi".
+    text = re.sub(r'\bLex(?:ie|y)\b', 'Lexi', text)
     return text
 
 
